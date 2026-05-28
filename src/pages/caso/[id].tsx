@@ -8,13 +8,16 @@ import ClarityCard from "@/components/case-detail/ClarityCard"
 import SimilarityWidget from "@/components/case-detail/SimilarityWidget"
 import CopilotChat from "@/components/chatbot/CopilotChat"
 import { claimsService, Claim } from "@/services/claims"
+import { applyScoringToClaim } from "@/services/mappers"
 import { 
   ArrowLeft, 
   ShieldAlert, 
   FolderOpen,
   Download,
   AlertTriangle,
-  Mail
+  Mail,
+  Sparkles,
+  Loader2
 } from "lucide-react"
 
 export default function ClaimDetail() {
@@ -23,6 +26,7 @@ export default function ClaimDetail() {
   
   const [claim, setClaim] = useState<Claim | null>(null)
   const [loading, setLoading] = useState(true)
+  const [scoring, setScoring] = useState(false)
   const [status, setStatus] = useState<"Aprobado" | "Investigación" | "Rechazado">("Investigación")
   const [isChatOpen, setIsChatOpen] = useState(true)
 
@@ -52,9 +56,22 @@ export default function ClaimDetail() {
 
   const handleStatusChange = (newStatus: "Aprobado" | "Investigación" | "Rechazado") => {
     setStatus(newStatus)
-    // En una app real, actualizaríamos el estado en el backend mediante un servicio
     if (claim) {
       claim.status = newStatus
+    }
+  }
+
+  const handleCalculateScore = async () => {
+    if (!claim) return
+    setScoring(true)
+    try {
+      const scoringResult = await claimsService.fetchScore(claim.id, true)
+      setClaim(applyScoringToClaim(claim, scoringResult))
+    } catch (e) {
+      console.error(e)
+      alert("No se pudo recalcular la auditoría. Verifica que el backend esté activo.")
+    } finally {
+      setScoring(false)
     }
   }
 
@@ -102,6 +119,9 @@ export default function ClaimDetail() {
 
   // Caso activo
   const activeClaim = claim!
+  const hasAutoAudit = Boolean(
+    activeClaim.rules && activeClaim.rules.length > 0 && activeClaim.total_score !== undefined
+  )
 
   return (
     <div className="flex bg-slate-50 min-h-screen print:bg-white print:min-h-0">
@@ -180,7 +200,7 @@ export default function ClaimDetail() {
 
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <Link
-                href={`/preview-correo?id=${activeClaim.id}`}
+                href={`/preview-correo?id=${encodeURIComponent(activeClaim.id)}`}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-brand-navy hover:bg-slate-50 hover:border-slate-300 rounded-md shadow-sm transition-all duration-300 print:hidden text-xs font-black uppercase tracking-widest select-none cursor-pointer"
               >
                 <Mail className="w-3.5 h-3.5 text-brand-blue" />
@@ -214,14 +234,36 @@ export default function ClaimDetail() {
 
             {/* Panel Derecho: Explicabilidad IA & Widget NLP de Similitud */}
             <div className="space-y-8 print:my-4">
-              <div className="flex items-center gap-2 pl-1 print:hidden">
-                <ShieldAlert className="w-4 h-4 text-[#00adef]" />
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Auditoría y Algoritmo Éxito IA
-                </h4>
+              <div className="flex items-center justify-between gap-2 pl-1 print:hidden">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-[#00adef]" />
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Auditoría y Algoritmo Éxito IA
+                  </h4>
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasAutoAudit ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-md">
+                      <Sparkles className="w-3 h-3" />
+                      Auditoría automática
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-700 rounded-md">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Auditoría pendiente
+                    </span>
+                  )}
+                  <button
+                    onClick={handleCalculateScore}
+                    disabled={scoring}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {scoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    Recalcular
+                  </button>
+                </div>
               </div>
               
-              {/* Clarity Card */}
               <ClarityCard claim={activeClaim} />
 
               {/* Widget de Similitud Lingüística BERT */}

@@ -1,5 +1,6 @@
 import React from "react"
 import { AlertCircle, CheckCircle, HelpCircle } from "lucide-react"
+import { SCORE_THRESHOLD_AMARILLO, SCORE_THRESHOLD_ROJO } from "@/utils/scoring"
 
 interface RiskBadgeProps {
   score: number
@@ -8,9 +9,9 @@ interface RiskBadgeProps {
 export function RiskBadge({ score }: RiskBadgeProps) {
   let textColor = "text-emerald-600 border-emerald-100 bg-emerald-50/30"
 
-  if (score >= 71) {
+  if (score >= SCORE_THRESHOLD_ROJO) {
     textColor = "text-rose-600 border-rose-100 bg-rose-50/30"
-  } else if (score >= 36) {
+  } else if (score >= SCORE_THRESHOLD_AMARILLO) {
     textColor = "text-amber-600 border-amber-100 bg-amber-50/30"
   }
 

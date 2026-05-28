@@ -1,65 +1,62 @@
-import React, { useState } from "react"
-import { Bell, ShieldAlert, Sparkles, AlertTriangle, CheckCircle, Clock } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/router"
+import { Bell, ShieldAlert, Sparkles, AlertTriangle, CheckCircle, Clock, RefreshCw } from "lucide-react"
+import {
+  AppNotification,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/services/notifications"
 
 interface HeaderProps {
   title?: string
   subtitle?: string
 }
 
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 1,
-    title: "Auditoría Urgente",
-    desc: "El caso de Alejandro Mendoza superó el umbral ético (85 pts). Requiere triaje manual inmediato.",
-    time: "Hace 5 minutos",
-    unread: true,
-    type: "critical"
-  },
-  {
-    id: 2,
-    title: "Alerta de Coincidencia NLP",
-    desc: "Similitud narrativa del 94% detectada contra el reporte histórico delictivo SHM-1120.",
-    time: "Hace 15 minutos",
-    unread: true,
-    type: "warning"
-  },
-  {
-    id: 3,
-    title: "Vigencia Corta de Póliza",
-    desc: "El siniestro fue reportado a solo 3 días de activarse la póliza del asegurado.",
-    time: "Hace 1 hora",
-    unread: false,
-    type: "info"
-  },
-  {
-    id: 4,
-    title: "Servidor AI Core Activo",
-    desc: "ShieldMind FastAPI conectado. Modelos de lenguaje natural BERT cargados exitosamente.",
-    time: "Hace 2 horas",
-    unread: false,
-    type: "success"
-  }
-]
-
-export default function Header({ 
-  title = "Bandeja de Entrada", 
-  subtitle = "Triaje inteligente y detección de anomalías en siniestros" 
+export default function Header({
+  title = "Bandeja de Entrada",
+  subtitle = "Triaje inteligente y detección de anomalías en siniestros",
 }: HeaderProps) {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS)
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const unreadCount = notifications.filter(n => n.unread).length
+  const loadNotifications = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await fetchNotifications()
+      setNotifications(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadNotifications()
+  }, [loadNotifications])
+
+  const unreadCount = notifications.filter((n) => n.unread).length
 
   const handleToggle = () => {
     setIsOpen(!isOpen)
+    if (!isOpen) loadNotifications()
   }
 
-  const handleMarkAsRead = (id: number) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n))
+  const handleMarkAsRead = (item: AppNotification) => {
+    markNotificationRead(item.id)
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n))
+    )
+    if (item.claimId) {
+      setIsOpen(false)
+      router.push(`/caso/${encodeURIComponent(item.claimId)}`)
+    }
   }
 
   const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false })))
+    markAllNotificationsRead(notifications.map((n) => n.id))
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })))
   }
 
   const getIcon = (type: string) => {
@@ -95,22 +92,16 @@ export default function Header({
 
   return (
     <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 shadow-sm relative z-20">
-      {/* Title Section */}
       <div>
-        <h2 className="text-xl font-bold text-brand-navy flex items-center gap-2">
-          {title}
-        </h2>
-        <p className="text-xs text-slate-500 font-medium">
-          {subtitle}
-        </p>
+        <h2 className="text-xl font-bold text-brand-navy flex items-center gap-2">{title}</h2>
+        <p className="text-xs text-slate-500 font-medium">{subtitle}</p>
       </div>
 
-      {/* Actions and Status Section */}
       <div className="flex items-center gap-6 relative">
-        {/* Notification Bell */}
-        <button 
+        <button
           onClick={handleToggle}
           className="relative p-2.5 rounded-md bg-slate-50 hover:bg-slate-100 text-brand-navy border border-slate-200/50 shadow-sm transition-all focus:outline-none select-none cursor-pointer"
+          aria-label="Notificaciones"
         >
           <Bell className="w-4.5 h-4.5" />
           {unreadCount > 0 && (
@@ -120,67 +111,80 @@ export default function Header({
           )}
         </button>
 
-        {/* Popover Dropdown */}
         {isOpen && (
           <>
-            {/* Click Outside Interceptor */}
             <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsOpen(false)} />
-            
-            {/* Dropdown Container */}
-            <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-premium rounded-lg z-50 overflow-hidden select-none animate-none">
-              
-              {/* Dropdown Header */}
+
+            <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-premium rounded-lg z-50 overflow-hidden select-none">
               <div className="p-4 border-b border-slate-150 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-black text-brand-navy uppercase tracking-wider">Notificaciones</span>
                   {unreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-extrabold">{unreadCount} nuevas</span>
+                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-extrabold">
+                      {unreadCount} nuevas
+                    </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button 
-                    onClick={handleMarkAllAsRead}
-                    className="text-[10px] font-extrabold text-brand-blue hover:text-brand-navy hover:underline uppercase transition-all select-none cursor-pointer"
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadNotifications}
+                    className="p-1 text-slate-400 hover:text-brand-blue"
+                    title="Actualizar"
                   >
-                    Marcar leído
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                   </button>
-                )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      className="text-[10px] font-extrabold text-brand-blue hover:text-brand-navy hover:underline uppercase transition-all cursor-pointer"
+                    >
+                      Marcar leído
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Notifications List */}
               <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
-                {notifications.length === 0 ? (
+                {loading && notifications.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
+                    <p className="text-xs font-bold">Cargando alertas...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <p className="text-xs font-bold">No tienes notificaciones de auditoría</p>
                   </div>
                 ) : (
                   notifications.map((item) => (
-                    <div 
+                    <div
                       key={item.id}
-                      onClick={() => handleMarkAsRead(item.id)}
+                      onClick={() => handleMarkAsRead(item)}
                       className={`p-3.5 border-l-4 transition-all duration-300 text-left cursor-pointer flex gap-3 relative group ${getColorClasses(item.type, item.unread)}`}
                     >
-                      {/* Icon container */}
                       <div className="mt-0.5 shrink-0 p-1.5 bg-white border border-slate-100 rounded-md shadow-sm group-hover:scale-105 transition-transform">
                         {getIcon(item.type)}
                       </div>
-                      
-                      {/* Text content */}
+
                       <div className="space-y-1 pr-4">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className={`text-[11.5px] font-black tracking-tight leading-tight ${item.unread ? "text-brand-navy" : "text-slate-500"}`}>
+                          <h4
+                            className={`text-[11.5px] font-black tracking-tight leading-tight ${item.unread ? "text-brand-navy" : "text-slate-500"}`}
+                          >
                             {item.title}
                           </h4>
-                          {item.unread && (
-                            <span className="w-1.5 h-1.5 bg-rose-600 rounded-full shrink-0" />
-                          )}
+                          {item.unread && <span className="w-1.5 h-1.5 bg-rose-600 rounded-full shrink-0" />}
                         </div>
-                        <p className={`text-[10.5px] font-semibold leading-normal ${item.unread ? "text-slate-600" : "text-slate-400"}`}>
+                        <p
+                          className={`text-[10.5px] font-semibold leading-normal ${item.unread ? "text-slate-600" : "text-slate-400"}`}
+                        >
                           {item.desc}
                         </p>
                         <div className="flex items-center gap-1 text-[9px] text-slate-400 font-extrabold uppercase">
                           <Clock className="w-3 h-3" />
                           <span>{item.time}</span>
+                          {item.claimId && (
+                            <span className="text-brand-blue normal-case font-bold">· Ver caso</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -188,13 +192,11 @@ export default function Header({
                 )}
               </div>
 
-              {/* Dropdown Footer */}
               <div className="p-2.5 border-t border-slate-100 text-center bg-slate-50/20">
                 <span className="text-[9.5px] text-slate-400 font-extrabold uppercase">
                   ShieldMind AI • Auditoría de Siniestros
                 </span>
               </div>
-
             </div>
           </>
         )}

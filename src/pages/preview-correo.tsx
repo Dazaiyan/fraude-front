@@ -66,10 +66,11 @@ export default function PreviewCorreo() {
     async function loadClaimData() {
       setLoading(true)
       try {
-        const data = await claimsService.getClaimById(id as string)
+        const claimId = decodeURIComponent(id as string)
+        const data = await claimsService.getClaimById(claimId)
         if (data) {
           setClaim(data)
-          const res = await claimsService.sendClaimEmail(id as string)
+          const res = await claimsService.sendClaimEmail(data.id)
           setEmailTemplate(res.htmlTemplate)
         }
       } catch (err) {

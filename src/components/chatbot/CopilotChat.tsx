@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react"
-import { claimsService, ChatMessage } from "@/services/claims"
+import { ChatMessage } from "@/services/claims"
+import { useChatQuery } from "@/hooks/useChatQuery"
+import { displayClaimId } from "@/services/mappers"
+import { formatChatTime } from "@/lib/formatChatTime"
 import { MessageSquare, Sparkles, Send, X, ArrowRight, User, Terminal, Database } from "lucide-react"
 
 interface CopilotChatProps {
@@ -8,70 +11,85 @@ interface CopilotChatProps {
   setIsOpen: (isOpen: boolean) => void
 }
 
+const defaultCaseMessage = (claimId: string): ChatMessage => ({
+  sender: "ai",
+  text: `Hola, soy tu **Copiloto AI de Siniestro**. Estoy conectado al expediente **${displayClaimId(claimId)}** en auditoría. Pregúntame sobre el asegurado, montos, riesgo o qué responderle al cliente.`,
+  timestamp: formatChatTime(),
+})
+
+const defaultGlobalMessage: ChatMessage = {
+  sender: "ai",
+  text: "Bienvenido al **Centro de Control e Integridad**. Aquí puedes hacer **Consultas Agénticas Globales** sobre la concentración de alertas rojas, proveedores marcados u anomalías en sucursales a nivel nacional.",
+  timestamp: formatChatTime(),
+}
+
 export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatProps) {
   const [activeTab, setActiveTab] = useState<"case" | "global">("case")
-  
-  // Historial de mensajes independiente para el Siniestro (Contextual)
-  const [caseMessages, setCaseMessages] = useState<ChatMessage[]>([
-    {
-      sender: "ai",
-      text: `Hola, soy tu **Copiloto AI de Siniestro**. Estoy conectado al expediente **${claimId}** (Alejandro Mendoza). Interrógame sobre las banderas de fraude disparadas o pregúntame qué responderle al asegurado.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
-
-  // Historial de mensajes independiente para la Consulta Agéntica (Global)
-  const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([
-    {
-      sender: "ai",
-      text: "Bienvenido al **Centro de Control e Integridad**. Aquí puedes hacer **Consultas Agénticas Globales** sobre la concentración de alertas rojas, proveedores marcados u anomalías en sucursales a nivel nacional.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
-
+  const [caseMessages, setCaseMessages] = useState<ChatMessage[]>([defaultCaseMessage(claimId)])
+  const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([defaultGlobalMessage])
   const [inputValue, setInputValue] = useState("")
-  const [isTyping, setIsTyping] = useState(false)
-  
-  const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Prompts sugeridos por pestaña (Escenarios A, B y C descritos en el reto)
+  const caseChat = useChatQuery(claimId, "case")
+  const globalChat = useChatQuery(claimId, "global")
+  const activeChat = activeTab === "case" ? caseChat : globalChat
+  const isTyping = activeChat.isTyping
+
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const historyLoadedRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    historyLoadedRef.current = null
+    setCaseMessages([defaultCaseMessage(claimId)])
+    setGlobalMessages([defaultGlobalMessage])
+  }, [claimId])
+
+  useEffect(() => {
+    if (!isOpen || historyLoadedRef.current === claimId) return
+
+    let cancelled = false
+
+    async function loadHistories() {
+      const [caseHistory, globalHistory] = await Promise.all([
+        caseChat.loadHistory(),
+        globalChat.loadHistory(),
+      ])
+      if (cancelled) return
+      if (caseHistory.length > 0) setCaseMessages(caseHistory)
+      if (globalHistory.length > 0) setGlobalMessages(globalHistory)
+      historyLoadedRef.current = claimId
+    }
+
+    loadHistories()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, claimId, caseChat.loadHistory, globalChat.loadHistory])
+
   const casePrompts = [
-    {
-      title: "¿Por qué el riesgo es alto?",
-      text: "¿Por qué este caso tiene score de riesgo alto?"
-    },
+    { title: "¿Por qué el riesgo es alto?", text: "¿Por qué este caso tiene score de riesgo alto?" },
     {
       title: "¿Qué responderle al cliente?",
-      text: "El cliente me pregunta qué documento le hace falta para pasar el flujo normal. ¿Qué le respondo?"
-    }
+      text: "El cliente me pregunta qué documento le hace falta para pasar el flujo normal. ¿Qué le respondo?",
+    },
   ]
 
   const globalPrompts = [
     {
       title: "Concentración de alertas rojas",
-      text: "¿Qué proveedores concentran la mayor cantidad de alertas rojas este mes?"
-    }
+      text: "¿Qué proveedores concentran la mayor cantidad de alertas rojas este mes?",
+    },
   ]
 
-  // Mantener scroll al final de la burbuja activa
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [caseMessages, globalMessages, isTyping, activeTab])
 
-  // Manejar el envío de mensajes
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return
 
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    
-    // Crear mensaje del usuario
-    const userMsg: ChatMessage = {
-      sender: "user",
-      text,
-      timestamp
-    }
+    const timestamp = formatChatTime()
+    const userMsg: ChatMessage = { sender: "user", text, timestamp }
 
-    // Guardar en la pestaña correspondiente
     if (activeTab === "case") {
       setCaseMessages((prev) => [...prev, userMsg])
     } else {
@@ -79,18 +97,13 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
     }
 
     setInputValue("")
-    setIsTyping(true)
 
     try {
-      // Simular latencia del LLM (500ms)
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      
-      const reply = await claimsService.sendMessageToAgent(claimId, text, activeTab)
-      
+      const reply = await activeChat.sendMessage(text)
       const aiMsg: ChatMessage = {
         sender: "ai",
         text: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: formatChatTime(),
       }
 
       if (activeTab === "case") {
@@ -100,33 +113,23 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
       }
     } catch (e) {
       console.error(e)
-    } finally {
-      setIsTyping(false)
     }
   }
 
-  // Renderizador de Markdown simple para negritas
   const formatText = (txt: string) => {
     return txt.split("\n").map((line, i) => {
-      let formatted = line
-      
-      // Reemplazar negritas **text** con <strong>text</strong>
-      const boldRegex = /\*\*(.*?)\*\*/g
-      formatted = formatted.replace(boldRegex, "<strong>$1</strong>")
-
+      const formatted = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       return (
         <p key={i} className="text-xs my-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatted }} />
       )
     })
   }
 
-  // Obtener mensajes de la pestaña activa
   const activeMessages = activeTab === "case" ? caseMessages : globalMessages
   const activePrompts = activeTab === "case" ? casePrompts : globalPrompts
 
   return (
     <>
-      {/* Botón flotante para abrir (Subtly Rounded) */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -138,13 +141,11 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
         </button>
       )}
 
-      {/* Panel de Chat Lateral Colapsable */}
-      <div 
+      <div
         className={`fixed top-0 right-0 h-screen w-96 bg-white border-l border-slate-200 flex flex-col justify-between transition-transform duration-300 z-40 shadow-premium ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {/* Cabecera del chat */}
         <div className="p-4 bg-brand-navy text-white flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -152,15 +153,13 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs font-black tracking-wide text-white">
-                  CENTRO DE CONTROL IA
-                </h4>
+                <h4 className="text-xs font-black tracking-wide text-white">CENTRO DE CONTROL IA</h4>
                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block -mt-0.5">
                   Auditoría Agéntica
                 </span>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsOpen(false)}
               className="p-1 text-slate-400 hover:bg-slate-800 hover:text-white rounded-md transition-colors"
             >
@@ -168,14 +167,11 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
             </button>
           </div>
 
-          {/* Selector de Pestañas (Subtly Rounded y de alto contraste) */}
           <div className="grid grid-cols-2 gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-md">
             <button
               onClick={() => setActiveTab("case")}
               className={`py-1.5 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-all ${
-                activeTab === "case"
-                  ? "bg-brand-blue text-white"
-                  : "text-slate-400 hover:text-white"
+                activeTab === "case" ? "bg-brand-blue text-white" : "text-slate-400 hover:text-white"
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -184,9 +180,7 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
             <button
               onClick={() => setActiveTab("global")}
               className={`py-1.5 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-all ${
-                activeTab === "global"
-                  ? "bg-brand-blue text-white"
-                  : "text-slate-400 hover:text-white"
+                activeTab === "global" ? "bg-brand-blue text-white" : "text-slate-400 hover:text-white"
               }`}
             >
               <Database className="w-3.5 h-3.5" />
@@ -195,41 +189,45 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
           </div>
         </div>
 
-        {/* Historial de Mensajes de la Pestaña Activa */}
         <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50/50">
           {activeMessages.map((msg, idx) => (
-            <div 
+            <div
               key={idx}
               className={`flex gap-2 max-w-[85%] ${msg.sender === "user" ? "ml-auto flex-row-reverse" : ""}`}
             >
-              {/* Avatar */}
-              <div className={`w-7 h-7 flex items-center justify-center text-[10px] font-bold rounded-full shrink-0 ${
-                msg.sender === "user" 
-                  ? "bg-brand-lightBlue text-white" 
-                  : "bg-brand-navy text-brand-lightBlue border border-brand-lightBlue/20"
-              }`}>
-                {msg.sender === "user" ? <User className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5 text-brand-lightBlue" />}
+              <div
+                className={`w-7 h-7 flex items-center justify-center text-[10px] font-bold rounded-full shrink-0 ${
+                  msg.sender === "user"
+                    ? "bg-brand-lightBlue text-white"
+                    : "bg-brand-navy text-brand-lightBlue border border-brand-lightBlue/20"
+                }`}
+              >
+                {msg.sender === "user" ? (
+                  <User className="w-3.5 h-3.5" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-brand-lightBlue" />
+                )}
               </div>
 
-              {/* Burbuja Soft Rounded */}
-              <div className={`p-3 text-xs border rounded-md shadow-sm ${
-                msg.sender === "user"
-                  ? "bg-brand-blue text-white border-brand-blue"
-                  : "bg-white text-brand-navy border-slate-200"
-              }`}>
-                <div className="space-y-1.5">
-                  {formatText(msg.text)}
-                </div>
-                <span className={`text-[8px] block text-right mt-1 font-semibold ${
-                  msg.sender === "user" ? "text-slate-200" : "text-slate-400"
-                }`}>
+              <div
+                className={`p-3 text-xs border rounded-md shadow-sm ${
+                  msg.sender === "user"
+                    ? "bg-brand-blue text-white border-brand-blue"
+                    : "bg-white text-brand-navy border-slate-200"
+                }`}
+              >
+                <div className="space-y-1.5">{formatText(msg.text)}</div>
+                <span
+                  className={`text-[8px] block text-right mt-1 font-semibold ${
+                    msg.sender === "user" ? "text-slate-200" : "text-slate-400"
+                  }`}
+                >
                   {msg.timestamp}
                 </span>
               </div>
             </div>
           ))}
 
-          {/* Escribiendo */}
           {isTyping && (
             <div className="flex gap-2 max-w-[80%]">
               <div className="w-7 h-7 bg-brand-navy flex items-center justify-center border border-brand-lightBlue/20 text-brand-lightBlue shrink-0 rounded-full">
@@ -245,7 +243,6 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
           <div ref={chatEndRef} />
         </div>
 
-        {/* Panel de Preguntas Sugeridas / Prompts por Escenarios */}
         <div className="p-3 border-t border-slate-200 bg-white space-y-1.5">
           <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block px-1 flex items-center gap-1">
             <Terminal className="w-3 h-3 text-brand-blue" />
@@ -265,7 +262,6 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
           </div>
         </div>
 
-        {/* Input de Texto */}
         <div className="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
           <input
             type="text"
@@ -282,7 +278,6 @@ export default function CopilotChat({ claimId, isOpen, setIsOpen }: CopilotChatP
             <Send className="w-4 h-4" />
           </button>
         </div>
-
       </div>
     </>
   )

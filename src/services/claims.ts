@@ -1,4 +1,19 @@
 import api from "./api"
+import type {
+  ChatIndexResponse,
+  ChatIndexStatusResponse,
+  ChatQueryResponse,
+  ScoringResponse,
+  SiniestroBackend,
+  SiniestrosSummary,
+} from "@/types/backend"
+import {
+  applyScoringToClaim,
+  chatSessionId,
+  mapClaimFormToCreatePayload,
+  mapSiniestroToClaim,
+  type NewClaimFormData,
+} from "./mappers"
 
 // Interfaces de la aplicación para TypeScript
 export interface ClaimDocument {
@@ -652,59 +667,173 @@ const defaultCopilotResponse = [
   "**Resumen Ejecutivo:** Siniestro estándar con bajo score de fraude. Los documentos y la narrativa de los hechos son completamente consistentes."
 ]
 
+function buildLocalEmailResponse(
+  claim: Claim | null,
+  claimId: string
+): { success: boolean; message: string; htmlTemplate: string } {
+  const insuredName = claim?.insuredName || "Asegurado"
+  const email = `${insuredName.toLowerCase().replace(/\s+/g, ".")}@gmail.com`
+
+  const htmlTemplate = `
+        <div style="background-color: #f4f6f9; padding: 30px; font-family: sans-serif; color: #081f3f;">
+          <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <div style="background-color: #081f3f; padding: 25px; text-align: center; border-bottom: 4px solid #00adef;">
+              <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;">Aseguradora del Sur</h2>
+              <p style="color: #00adef; margin: 5px 0 0 0; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;">Ficha Registral Siniestro • ShieldMind AI</p>
+            </div>
+            <div style="padding: 30px;">
+              <p style="font-size: 14px; line-height: 1.5; font-weight: 600; color: #1e293b;">Estimado/a ${insuredName},</p>
+              <p style="font-size: 13px; line-height: 1.6; color: #475569;">Le confirmamos que su reporte de siniestro ha sido ingresado exitosamente en nuestra plataforma de triaje con inteligencia artificial. A continuación, detallamos la Ficha Registral Oficial emitida bajo radicado.</p>
+              
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
+                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Código de Radicado Oficial</span>
+                <span style="font-family: monospace; font-size: 22px; font-weight: 900; color: #00adef; letter-spacing: 1px;">${claimId}</span>
+              </div>
+              
+              <h3 style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; color: #081f3f; margin-top: 25px;">Detalles de la Ficha Registral</h3>
+              
+              <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;">
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9; width: 45%;">Ramo de Seguro:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-weight: 600;">${claim ? claim.line : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Código de Póliza:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-family: monospace;">${claim ? claim.policyNumber : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Identificación del Asegurado:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.insuredId || claim.insuredName) : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Fecha del Accidente:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.occurrenceDate || claim.reportDate) : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Fecha de Reporte:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? claim.reportDate : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Monto Reclamado:</td>
+                  <td style="padding: 8px 0; color: #17478e; border-bottom: 1px solid #f1f5f9; font-weight: 800;">$${claim ? claim.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} USD</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Sucursal:</td>
+                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.branch || "Guayaquil") : "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Estado Inicial:</td>
+                  <td style="padding: 8px 0; color: #d97706; border-bottom: 1px solid #f1f5f9; font-weight: 700;">${claim ? claim.status : "Pendiente de Auditoría"}</td>
+                </tr>
+              </table>
+              
+              <div style="margin-top: 25px; padding: 15px; background-color: #f8fafc; border-left: 4px solid #081f3f; border-radius: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #081f3f; text-transform: uppercase; display: block; margin-bottom: 5px;">Descripción de Hechos Reportados</span>
+                <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: #334155; font-style: italic;">
+                  "${claim ? claim.narrative : "N/A"}"
+                </p>
+              </div>
+              
+              <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-top: 30px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                Este es un mensaje de notificación automatizado enviado bajo las políticas de transparencia y explicabilidad ética de <strong>Aseguradora del Sur</strong>.<br/>
+                Para consultas de su liquidación, por favor contacte a su bróker asignado.
+              </p>
+            </div>
+            <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+              ShieldMind AI • © 2026 Aseguradora del Sur S.A. Todos los derechos reservados.
+            </div>
+          </div>
+        </div>
+      `
+
+  return {
+    success: true,
+    message: `Correo de confirmación simulado y despachado con éxito a ${email}.`,
+    htmlTemplate,
+  }
+}
+
 // Funciones del Servicio de Axios
 export const claimsService = {
-  // 1. Obtener todos los siniestros
   async getClaims(): Promise<Claim[]> {
     try {
-      const response = await api.get<Claim[]>("/claims")
-      return response.data
+      const response = await api.get<SiniestroBackend[]>("/api/v1/siniestros")
+      return response.data.map(mapSiniestroToClaim)
     } catch (error) {
-      console.warn("Backend /claims no disponible. Usando datos simulados.")
-      return mockClaims
+      const status = (error as { response?: { status?: number } }).response?.status
+      if (status === 401) {
+        console.warn("Sesión sin email de analista. Inicia sesión con Gmail.")
+        return []
+      }
+      console.warn("Backend /api/v1/siniestros no disponible.")
+      return []
     }
   },
 
-  // 2. Obtener detalle de siniestro por ID
   async getClaimById(id: string): Promise<Claim | null> {
+    const trimmed = id.trim()
+    const mock = mockClaims.find((c) => c.id === trimmed)
+    if (mock && trimmed.startsWith("SHM-")) {
+      return mock
+    }
+
+    const encodedId = encodeURIComponent(trimmed)
     try {
-      const response = await api.get<Claim>(`/claims/${id}`)
-      return response.data
-    } catch (error) {
-      console.warn(`Backend /claims/${id} no disponible. Buscando en datos simulados.`)
-      const claim = mockClaims.find((c) => c.id === id)
-      return claim || null
+      const response = await api.get<SiniestroBackend>(`/api/v1/siniestros/${encodedId}`)
+      return mapSiniestroToClaim(response.data)
+    } catch {
+      if (mock) return mock
+      console.warn(`Siniestro no encontrado: ${trimmed}`)
+      return null
     }
   },
 
-  // 3. Crear reporte público de siniestro (asegurado)
-  async postNewClaim(data: {
-    id: string
-    policyNumber: string
-    insuredId: string
-    line: "Vehículos" | "Salud" | "Incendios" | "Vida" | "Hogar"
-    cobertura: string
-    occurrenceDate: string
-    reportDate: string
-    amount: number
-    estimatedAmount: number
-    paidAmount: number
-    status: "Aprobado" | "Investigación" | "Rechazado" | "Pendiente"
-    branch: string
-    narrative: string
-    documentsComplete: string
-    insuredName: string
-    daysSincePolicyStart: number
-    daysUntilPolicyEnd: number
-    daysBetweenOccurrenceReport: number
-    claimHistoryCount: number
-    simulatedFraudLabel: string
-  }): Promise<{ success: boolean; claimId: string }> {
+  async fetchScore(id: string, useAI: boolean): Promise<ScoringResponse> {
+    const endpoint = useAI
+      ? `/api/v1/siniestros/${id}/score/ai`
+      : `/api/v1/siniestros/${id}/score`
+    const payload = useAI ? { force_ai: true } : { signals: {} }
+    const response = await api.post<ScoringResponse>(endpoint, payload, { timeout: 60000 })
+    return response.data
+  },
+
+  async getSummary(): Promise<SiniestrosSummary | null> {
     try {
-      const response = await api.post<{ success: boolean; claimId: string }>("/claims", data)
+      const response = await api.get<SiniestrosSummary>("/api/v1/siniestros/summary")
       return response.data
     } catch (error) {
-      console.warn("Backend POST /claims no disponible. Simulando creación de siniestro.")
+      console.warn("Backend /api/v1/siniestros/summary no disponible.")
+      return null
+    }
+  },
+
+  async getIndexStatus(): Promise<ChatIndexStatusResponse | null> {
+    try {
+      const response = await api.get<ChatIndexStatusResponse>("/api/v1/chat/index/status")
+      return response.data
+    } catch (error) {
+      console.warn("Backend /api/v1/chat/index/status no disponible.")
+      return null
+    }
+  },
+
+  async indexEmbeddings(): Promise<ChatIndexResponse | null> {
+    try {
+      const response = await api.post<ChatIndexResponse>("/api/v1/chat/index", {}, { timeout: 120000 })
+      return response.data
+    } catch (error) {
+      console.warn("Backend POST /api/v1/chat/index no disponible.")
+      return null
+    }
+  },
+
+  async postNewClaim(data: NewClaimFormData): Promise<{ success: boolean; claimId: string }> {
+    try {
+      const payload = mapClaimFormToCreatePayload(data)
+      const response = await api.post<SiniestroBackend>("/api/v1/siniestros", payload)
+      return { success: true, claimId: response.data.id_siniestro }
+    } catch (error) {
+      console.warn("Backend POST /api/v1/siniestros no disponible. Simulando creación de siniestro.")
       
       // Determinar riesgo en base a etiqueta fraude simulada
       let simulatedScore = 12
@@ -866,103 +995,33 @@ export const claimsService = {
   // 5. Simular envío de correo electrónico oficial con Ficha Registral
   async sendClaimEmail(claimId: string): Promise<{ success: boolean; message: string; htmlTemplate: string }> {
     try {
-      const response = await api.post<{ success: boolean; message: string; htmlTemplate: string }>(`/claims/${claimId}/send-email`)
+      const response = await api.post<{ success: boolean; message: string; htmlTemplate: string }>(
+        "/api/v1/siniestros/send-email",
+        { id_siniestro: claimId.trim() }
+      )
       return response.data
     } catch (error) {
-      console.warn(`Backend POST /claims/${claimId}/send-email no disponible. Generando plantilla localmente en fallback.`)
-      
-      const claim = mockClaims.find((c) => c.id === claimId)
-      const insuredName = claim ? claim.insuredName : "Asegurado"
-      const email = `${insuredName.toLowerCase().replace(/\s+/g, ".")}@gmail.com`
-      
-      // Retornar una simulación exitosa con una plantilla HTML premium
-      const htmlTemplate = `
-        <div style="background-color: #f4f6f9; padding: 30px; font-family: sans-serif; color: #081f3f;">
-          <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-            <div style="background-color: #081f3f; padding: 25px; text-align: center; border-bottom: 4px solid #00adef;">
-              <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;">Aseguradora del Sur</h2>
-              <p style="color: #00adef; margin: 5px 0 0 0; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;">Ficha Registral Siniestro • ShieldMind AI</p>
-            </div>
-            <div style="padding: 30px;">
-              <p style="font-size: 14px; line-height: 1.5; font-weight: 600; color: #1e293b;">Estimado/a ${insuredName},</p>
-              <p style="font-size: 13px; line-height: 1.6; color: #475569;">Le confirmamos que su reporte de siniestro ha sido ingresado exitosamente en nuestra plataforma de triaje con inteligencia artificial. A continuación, detallamos la Ficha Registral Oficial emitida bajo radicado.</p>
-              
-              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
-                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Código de Radicado Oficial</span>
-                <span style="font-family: monospace; font-size: 22px; font-weight: 900; color: #00adef; letter-spacing: 1px;">${claimId}</span>
-              </div>
-              
-              <h3 style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; color: #081f3f; margin-top: 25px;">Detalles de la Ficha Registral</h3>
-              
-              <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;">
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9; width: 45%;">Ramo de Seguro:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-weight: 600;">${claim ? claim.line : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Código de Póliza:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-family: monospace;">${claim ? claim.policyNumber : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Identificación del Asegurado:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.insuredId || "1723456789") : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Fecha del Accidente:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.occurrenceDate || claim.reportDate) : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Fecha de Reporte:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? claim.reportDate : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Monto Reclamado:</td>
-                  <td style="padding: 8px 0; color: #17478e; border-bottom: 1px solid #f1f5f9; font-weight: 800;">$${claim ? claim.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} USD</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Sucursal:</td>
-                  <td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${claim ? (claim.branch || "Guayaquil") : "N/A"}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; font-weight: 700; color: #64748b; border-bottom: 1px solid #f1f5f9;">Estado Inicial:</td>
-                  <td style="padding: 8px 0; color: #d97706; border-bottom: 1px solid #f1f5f9; font-weight: 700;">Pendiente de Auditoría</td>
-                </tr>
-              </table>
-              
-              <div style="margin-top: 25px; padding: 15px; background-color: #f8fafc; border-left: 4px solid #081f3f; border-radius: 4px;">
-                <span style="font-size: 11px; font-weight: 700; color: #081f3f; text-transform: uppercase; display: block; margin-bottom: 5px;">Descripción de Hechos Reportados</span>
-                <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: #334155; font-style: italic;">
-                  "${claim ? claim.narrative : "N/A"}"
-                </p>
-              </div>
-              
-              <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-top: 30px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px;">
-                Este es un mensaje de notificación automatizado enviado bajo las políticas de transparencia y explicabilidad ética de <strong>Aseguradora del Sur</strong>.<br/>
-                Para consultas de su liquidación, por favor contacte a su bróker asignado.
-              </p>
-            </div>
-            <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
-              ShieldMind AI • © 2026 Aseguradora del Sur S.A. Todos los derechos reservados.
-            </div>
-          </div>
-        </div>
-      `
-      
-      return {
-        success: true,
-        message: `Correo de confirmación simulado y despachado con éxito a ${email}.`,
-        htmlTemplate: htmlTemplate
-      }
+      console.warn("Backend send-email no disponible. Generando plantilla localmente.")
+      const claim = await this.getClaimById(claimId)
+      return buildLocalEmailResponse(claim, claimId)
     }
   },
 
-  // 4. Enviar mensaje de consulta al chatbot copiloto (Soporta contexto del Siniestro o Consulta Agéntica Global)
   async sendMessageToAgent(claimId: string, text: string, scope: "case" | "global"): Promise<string> {
     try {
-      const response = await api.post<{ reply: string }>("/chat", { claimId, text, scope })
-      return response.data.reply
+      const response = await api.post<ChatQueryResponse>(
+        "/api/v1/chat/query",
+        {
+          question: text,
+          session_id: chatSessionId(claimId, scope),
+          id_siniestro: scope === "case" ? claimId.trim() : null,
+          k: scope === "case" ? 4 : 8,
+        },
+        { timeout: 60000 }
+      )
+      return response.data.answer
     } catch (error) {
-      console.warn(`Backend /chat no disponible. Simulando respuesta del Copiloto (Scope: ${scope}).`)
+      console.warn(`Backend /api/v1/chat/query no disponible. Simulando respuesta del Copiloto (Scope: ${scope}).`)
       
       const query = text.toLowerCase()
 
@@ -989,34 +1048,12 @@ export const claimsService = {
     }
   },
 
-  // 6. Simular la Ingestión / Entrada de un siniestro desde un correo electrónico
-  async ingestClaimEmail(data: {
-    id: string
-    policyNumber: string
-    insuredId: string
-    line: "Vehículos" | "Salud" | "Incendios" | "Vida" | "Hogar"
-    cobertura: string
-    occurrenceDate: string
-    reportDate: string
-    amount: number
-    estimatedAmount: number
-    paidAmount: number
-    status: "Aprobado" | "Investigación" | "Rechazado" | "Pendiente"
-    branch: string
-    narrative: string
-    documentsComplete: string
-    insuredName: string
-    daysSincePolicyStart: number
-    daysUntilPolicyEnd: number
-    daysBetweenOccurrenceReport: number
-    claimHistoryCount: number
-    simulatedFraudLabel: string
-  }): Promise<{ success: boolean; claimId: string }> {
+  async ingestClaimEmail(data: NewClaimFormData): Promise<{ success: boolean; claimId: string }> {
     try {
-      const response = await api.post<{ success: boolean; claimId: string }>("/claims/ingest-email", data)
-      return response.data
+      await api.post("/api/v1/gmail/scan", {}, { timeout: 120000 })
+      return this.postNewClaim(data)
     } catch (error) {
-      console.warn("Backend POST /claims/ingest-email no disponible. Simulando Ingestión de correo en memoria local.")
+      console.warn("Backend POST /api/v1/gmail/scan no disponible. Simulando ingestión de correo.")
       return this.postNewClaim(data)
     }
   },

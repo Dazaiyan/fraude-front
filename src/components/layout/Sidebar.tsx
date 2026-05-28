@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/router"
-import { Shield, LayoutDashboard, FileText, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react"
+import { Shield, LayoutDashboard, FileText, MessageSquare, ChevronLeft, ChevronRight, LogOut, Mail } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
+import { getUserInitials } from "@/services/auth"
 
 export default function Sidebar() {
   const router = useRouter()
+  const { user, ready, logout } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   // SSR-safe loading of the preference from localStorage
@@ -26,6 +29,11 @@ export default function Sidebar() {
       name: "Bandeja de Entrada",
       path: "/",
       icon: LayoutDashboard,
+    },
+    {
+      name: "Correos Gmail",
+      path: "/correos",
+      icon: Mail,
     },
     {
       name: "Copiloto Antifraude",
@@ -99,15 +107,34 @@ export default function Sidebar() {
         </nav>
 
         {/* User Session Info */}
-        <div className={`p-4 border-t border-slate-800 bg-slate-900/50 flex items-center ${isCollapsed ? "justify-center" : "gap-3"} transition-all duration-300 overflow-hidden`}>
-          <div className="w-9 h-9 bg-brand-blue flex items-center justify-center font-bold text-sm border border-brand-lightBlue/30 text-white rounded-full shrink-0">
-            AD
-          </div>
-          {!isCollapsed && (
-            <div className="overflow-hidden animate-fade-in flex flex-col">
-              <h4 className="text-xs font-semibold text-white truncate leading-none mb-1">Andrés Delgado</h4>
-              <p className="text-[10px] text-slate-400 truncate leading-none">Analista Senior de Fraude</p>
+        <div className={`p-4 border-t border-slate-800 bg-slate-900/50 ${isCollapsed ? "flex flex-col items-center gap-2" : "space-y-2"}`}>
+          <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-3"} transition-all duration-300 overflow-hidden`}>
+            <div className="w-9 h-9 bg-brand-blue flex items-center justify-center font-bold text-sm border border-brand-lightBlue/30 text-white rounded-full shrink-0">
+              {ready && user ? getUserInitials(user.name) : "…"}
             </div>
+            {!isCollapsed && (
+              <div className="overflow-hidden animate-fade-in flex flex-col min-w-0 flex-1">
+                <h4 className="text-xs font-semibold text-white truncate leading-none mb-1">
+                  {ready && user ? user.name : "Cargando…"}
+                </h4>
+                <p className="text-[10px] text-slate-400 truncate leading-none">
+                  {ready && user ? user.role : "—"}
+                </p>
+              </div>
+            )}
+          </div>
+          {!isCollapsed && ready && user && (
+            <button
+              type="button"
+              onClick={async () => {
+                await logout()
+                router.push("/login")
+              }}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            >
+              <LogOut className="w-3 h-3" />
+              Cerrar sesión
+            </button>
           )}
         </div>
       </aside>

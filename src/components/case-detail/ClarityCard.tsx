@@ -1,6 +1,7 @@
 import React from "react"
 import { Sparkles, ShieldCheck } from "lucide-react"
 import { Claim } from "@/services/claims"
+import { scoreToBand, scoreToColor } from "@/utils/scoring"
 
 interface ClarityCardProps {
   claim?: Claim | null
@@ -23,9 +24,8 @@ export default function ClarityCard({ claim }: ClarityCardProps) {
 
   // Si viene total_score del backend lo prioriza, de lo contrario usa riskScore
   const score = activeClaim.total_score !== undefined ? activeClaim.total_score : activeClaim.riskScore
-  
-  // Si viene score_color o score_band lo prioriza
-  const riskLevel = activeClaim.score_color || activeClaim.riskLevel
+  const riskColor = scoreToColor(score)
+  const riskBand = scoreToBand(score)
   
   const breakdown = activeClaim.clarityScoreBreakdown || defaultBreakdown
   const rules = activeClaim.rules
@@ -63,7 +63,7 @@ export default function ClarityCard({ claim }: ClarityCardProps) {
     }
   }
 
-  const config = getRiskConfig(riskLevel)
+  const config = getRiskConfig(riskColor)
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-6 space-y-6 shadow-sm">
@@ -95,6 +95,9 @@ export default function ClarityCard({ claim }: ClarityCardProps) {
           <h4 className={`text-xs font-black uppercase tracking-widest ${config.textColor}`}>
             {config.title}
           </h4>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            {riskColor} · banda {riskBand} · {score} pts
+          </p>
           <p className="text-xs text-brand-navy font-semibold leading-relaxed">
             {config.description}
           </p>

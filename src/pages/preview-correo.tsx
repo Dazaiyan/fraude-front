@@ -17,8 +17,6 @@ import {
   Sparkles,
   Database,
   ArrowRight,
-  Code,
-  Terminal,
   Play,
   Save,
   CheckCircle2,
@@ -60,7 +58,6 @@ export default function PreviewCorreo() {
   const [inboundHistorial, setInboundHistorial] = useState("")
   const [inboundFraudeLabel, setInboundFraudeLabel] = useState("Alta/Crítica")
 
-  const [intakeLogs, setIntakeLogs] = useState<string[]>([])
   const [intakeRunning, setIntakeRunning] = useState(false)
   const [intakeCompleted, setIntakeCompleted] = useState(false)
   const [createdIntakeId, setCreatedIntakeId] = useState("")
@@ -164,7 +161,6 @@ export default function PreviewCorreo() {
     setInboundId(randomId)
     setCreatedIntakeId("")
     setIntakeCompleted(false)
-    setIntakeLogs([])
 
     if (type === "theft") {
       setInboundPoliza("POL-VEH-2025-9981")
@@ -213,26 +209,8 @@ export default function PreviewCorreo() {
     setIntakeRunning(true)
     setIntakeCompleted(false)
     setCreatedIntakeId("")
-    
-    const logs = [
-      "[SMTP PORT 25] Conexión SMTP entrante detectada desde mail-server.gmail.com...",
-      "[SMTP HANDSHAKE] Canal de seguridad TLS establecido. Handshake completado con éxito.",
-      "[IMAP LISTENER] Procesando cabeceras del correo electrónico recibido...",
-      `[IMAP HEADER] De: ${inboundBeneficiario.toLowerCase().replace(/\s+/g, ".")}@gmail.com | Asunto: Siniestro - Radicado ${inboundId}`,
-      "[PARSER ENGINE] Abriendo adjunto 'ficha_registral.html' y extrayendo variables...",
-      "[PARSER ENGINE] Extracción de base de datos exitosa: 20 campos oficiales mapeados correctamente.",
-      "[MAPPER PROCESS] Sincronizando campos: Código de Póliza, Sucursal, Cronología y Montos...",
-      "[AI SHIELDMIND CO-PILOT] Firing fraud evaluation pipeline (8 Audit Rules)...",
-    ]
-
-    // Añadir logs secuenciales con micro-retrasos para efecto wow visual
-    for (let i = 0; i < logs.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 400))
-      setIntakeLogs(prev => [...prev, logs[i]])
-    }
 
     try {
-      // Registrar en backend/mock
       await claimsService.ingestClaimEmail({
         id: inboundId,
         policyNumber: inboundPoliza,
@@ -256,22 +234,20 @@ export default function PreviewCorreo() {
         simulatedFraudLabel: inboundFraudeLabel
       })
 
-      // Logs finales
-      await new Promise(resolve => setTimeout(resolve, 500))
-      setIntakeLogs(prev => [
-        ...prev, 
-        `[AI SHIELDMIND CO-PILOT] Auditoría finalizada. Score de Fraude Calculado: ${
-          inboundFraudeLabel === "Alta/Crítica" ? "78 (RIESGO CRÍTICO)" : inboundFraudeLabel === "Media" ? "45 (RIESGO MEDIO)" : "12 (RIESGO BAJO)"
-        }.`,
-        `[DATABASE SERVICE] Insertando registro radicado con ID oficial: ${inboundId} en la base de datos de Aseguradora del Sur.`,
-        `[SUCCESS] Ingestión SMTP finalizada. El caso ya está disponible en la Bandeja Central del Triaje.`
-      ])
-
       setCreatedIntakeId(inboundId)
       setIntakeCompleted(true)
+      setToast({
+        message: `Siniestro ${inboundId} registrado y auditado. Ya está en la bandeja de triaje.`,
+        type: "success",
+      })
+      setTimeout(() => setToast(null), 4000)
     } catch (e) {
       console.error(e)
-      setIntakeLogs(prev => [...prev, "[ERROR] Falla crítica durante la ingestión en la base de datos."])
+      setToast({
+        message: "No se pudo registrar el siniestro. Verifica la conexión con el backend.",
+        type: "error",
+      })
+      setTimeout(() => setToast(null), 4000)
     } finally {
       setIntakeRunning(false)
     }
@@ -523,11 +499,8 @@ export default function PreviewCorreo() {
 
           {/* TAB 2: SIMULADOR DE INGESTIÓN (INBOUND INTAKE SIMULATOR) */}
           {activeTab === "inbound" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Columna Izquierda: Formulario en Blanco (Email del Asegurado) - 6 Cols */}
-              <div className="lg:col-span-6 space-y-6">
-                <div className="bg-white border border-slate-200 p-6 shadow-sm space-y-6 rounded-none">
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="bg-white border border-slate-200 p-6 shadow-sm space-y-6 rounded-none">
                   
                   <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                     <div className="space-y-0.5">
@@ -697,96 +670,50 @@ export default function PreviewCorreo() {
                       disabled={intakeRunning}
                       className="w-full inline-flex items-center justify-center gap-2 py-3 bg-brand-navy hover:bg-brand-blue text-white text-xs font-black uppercase tracking-widest transition-colors rounded-none shadow-sm cursor-pointer disabled:bg-slate-300"
                     >
-                      <Play className="w-4 h-4 fill-current" />
-                      Simular Envío de Correo (Responder)
+                      {intakeRunning ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Procesando ingesta…
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 fill-current" />
+                          Simular Envío de Correo (Responder)
+                        </>
+                      )}
                     </button>
                   </div>
 
-                </div>
               </div>
 
-              {/* Columna Derecha: Consola Ingestión IA (Terminal) - 6 Cols */}
-              <div className="lg:col-span-6 space-y-6">
-                
-                {/* Consola Terminal */}
-                <div className="bg-slate-950 border border-slate-900 shadow-md overflow-hidden rounded-none">
-                  
-                  {/* Header de la Terminal */}
-                  <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-slate-400 border-b border-slate-900">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-brand-lightBlue" />
-                      <span className="text-[10px] font-mono font-black uppercase tracking-widest">
-                        Consola: ShieldMind Inbound Parser v1.0
-                      </span>
+              {intakeCompleted && createdIntakeId && (
+                <div className="bg-emerald-50 border border-emerald-200 p-6 space-y-4 shadow-sm animate-fade-in">
+                  <div className="flex gap-3 items-start">
+                    <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-black text-emerald-900 uppercase tracking-wide">
+                        Siniestro ingerido exitosamente
+                      </h4>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        ShieldMind AI registró el radicado <strong>{createdIntakeId}</strong> y lo auditó automáticamente. Ya está disponible en la bandeja central.
+                      </p>
                     </div>
-                    <span className="text-[9px] font-mono font-bold bg-slate-950 text-slate-500 px-1.5 py-0.5 border border-slate-900">
-                      LIVE SMTP
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between gap-4">
+                    <span className="text-[10px] text-emerald-600 font-bold font-mono">
+                      ID: {createdIntakeId}
                     </span>
+                    <Link
+                      href={`/caso/${createdIntakeId}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all rounded-none shadow-xs cursor-pointer"
+                    >
+                      Ver caso
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
                   </div>
-
-                  {/* Cuerpo de Terminal */}
-                  <div className="p-4 font-mono text-[11px] leading-relaxed min-h-[350px] max-h-[420px] overflow-y-auto space-y-2 bg-slate-950">
-                    {intakeLogs.length === 0 ? (
-                      <div className="text-slate-600 italic py-10 text-center uppercase tracking-widest text-[9.5px]">
-                        Esperando transmisión SMTP del formulario...
-                      </div>
-                    ) : (
-                      intakeLogs.map((log, idx) => {
-                        let colorClass = "text-slate-300"
-                        if (log.startsWith("[ERROR]")) colorClass = "text-rose-500 font-extrabold"
-                        if (log.startsWith("[SUCCESS]")) colorClass = "text-emerald-400 font-black"
-                        if (log.startsWith("[AI SHIELDMIND")) colorClass = "text-brand-lightBlue font-extrabold"
-                        if (log.includes("HANDSHAKE") || log.includes("SMTP PORT")) colorClass = "text-amber-500"
-                        
-                        return (
-                          <div key={idx} className={`${colorClass} border-l border-slate-900 pl-2`}>
-                            {log}
-                          </div>
-                        )
-                      })
-                    )}
-                    {intakeRunning && (
-                      <div className="flex items-center gap-2 text-brand-lightBlue animate-pulse pl-2">
-                        <span className="h-2 w-2 rounded-full bg-brand-lightBlue animate-ping"></span>
-                        <span>Auditando y extrayendo variables del siniestro...</span>
-                      </div>
-                    )}
-                  </div>
-
                 </div>
-
-                {/* Caja de Éxito Final */}
-                {intakeCompleted && createdIntakeId && (
-                  <div className="bg-emerald-50 border border-emerald-200 p-6 space-y-4 shadow-sm animate-fade-in">
-                    <div className="flex gap-3 items-start">
-                      <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-black text-emerald-900 uppercase tracking-wide">
-                          Siniestro Ingerido Exitosamente
-                        </h4>
-                        <p className="text-xs text-emerald-800 leading-relaxed">
-                          El motor de ShieldMind AI ha recibido el correo electrónico, extraído las 20 variables de la Ficha Registral, corrido las reglas de fraude y dado de alta el radicado **{createdIntakeId}** en la bandeja central.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-emerald-600 font-bold font-mono">
-                        DATABASE REGISTRATION CODE: {createdIntakeId}
-                      </span>
-                      <Link
-                        href={`/caso/${createdIntakeId}`}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all rounded-none shadow-xs cursor-pointer"
-                      >
-                        Ver Caso Analizado por IA
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                  </div>
-                )}
-
-              </div>
-
+              )}
             </div>
           )}
 

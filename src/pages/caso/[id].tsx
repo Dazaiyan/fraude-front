@@ -8,7 +8,6 @@ import ClarityCard from "@/components/case-detail/ClarityCard"
 import SimilarityWidget from "@/components/case-detail/SimilarityWidget"
 import CopilotChat from "@/components/chatbot/CopilotChat"
 import { claimsService, Claim } from "@/services/claims"
-import { applyScoringToClaim } from "@/services/mappers"
 import { 
   ArrowLeft, 
   ShieldAlert, 
@@ -29,7 +28,6 @@ export default function ClaimDetail() {
   
   const [claim, setClaim] = useState<Claim | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scoring, setScoring] = useState(false)
   const [status, setStatus] = useState<"Aprobado" | "Investigación" | "Rechazado" | "Pendiente">("Pendiente")
   const [savingStatus, setSavingStatus] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
@@ -126,29 +124,6 @@ export default function ClaimDetail() {
       setTimeout(() => setToast(null), 4000)
     } finally {
       setSavingStatus(false)
-    }
-  }
-
-  const handleCalculateScore = async () => {
-    if (!claim) return
-    setScoring(true)
-    try {
-      const scoringResult = await claimsService.fetchScore(claim.id, true)
-      setClaim(applyScoringToClaim(claim, scoringResult))
-      setToast({ 
-        message: "Auditoría recalculada con éxito.", 
-        type: "success" 
-      })
-      setTimeout(() => setToast(null), 3000)
-    } catch (e) {
-      console.error(e)
-      setToast({ 
-        message: "No se pudo recalcular la auditoría. Verifica que el backend esté activo.", 
-        type: "error" 
-      })
-      setTimeout(() => setToast(null), 4000)
-    } finally {
-      setScoring(false)
     }
   }
 
@@ -358,14 +333,6 @@ export default function ClaimDetail() {
                       Auditoría pendiente
                     </span>
                   )}
-                  <button
-                    onClick={handleCalculateScore}
-                    disabled={scoring}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {scoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    Recalcular
-                  </button>
                 </div>
               </div>
               

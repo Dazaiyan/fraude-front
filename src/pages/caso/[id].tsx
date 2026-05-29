@@ -17,7 +17,10 @@ import {
   AlertTriangle,
   Mail,
   Sparkles,
-  Loader2
+  Loader2,
+  Save,
+  CheckCircle2,
+  Trash2
 } from "lucide-react"
 
 export default function ClaimDetail() {
@@ -27,8 +30,43 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState<Claim | null>(null)
   const [loading, setLoading] = useState(true)
   const [scoring, setScoring] = useState(false)
-  const [status, setStatus] = useState<"Aprobado" | "Investigación" | "Rechazado">("Investigación")
+  const [status, setStatus] = useState<"Aprobado" | "Investigación" | "Rechazado" | "Pendiente">("Pendiente")
+  const [savingStatus, setSavingStatus] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDeleteClaim = async () => {
+    if (!claim) return
+    const confirm = window.confirm(
+      `¿Está absolutamente seguro de que desea eliminar permanentemente el expediente ${claim.id}? Esta acción borrará de forma irreversible el radicado, las puntuaciones, los embeddings vectoriales y todo su historial de chats de la base de datos.`
+    )
+    if (!confirm) return
+
+    setIsDeleting(true)
+    try {
+      const res = await claimsService.deleteClaim(claim.id)
+      if (res.success) {
+        setToast({
+          message: `El expediente ${claim.id} ha sido borrado exitosamente de la base de datos.`,
+          type: "success"
+        })
+        setTimeout(() => {
+          setToast(null)
+          router.push("/")
+        }, 2200)
+      }
+    } catch (e) {
+      console.error(e)
+      setToast({
+        message: "Ocurrió un error al intentar borrar el expediente.",
+        type: "error"
+      })
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   useEffect(() => {
     if (id) {
@@ -43,7 +81,12 @@ export default function ClaimDetail() {
       if (data) {
         setClaim(data)
         // Alinear el estado local interactivo del dictamen con el estado de la DB
-        if (data.status === "Aprobado" || data.status === "Investigación" || data.status === "Rechazado") {
+        if (
+          data.status === "Aprobado" ||
+          data.status === "Investigación" ||
+          data.status === "Rechazado" ||
+          data.status === "Pendiente"
+        ) {
           setStatus(data.status)
         }
       }
@@ -54,10 +97,35 @@ export default function ClaimDetail() {
     }
   }
 
-  const handleStatusChange = (newStatus: "Aprobado" | "Investigación" | "Rechazado") => {
+  const handleStatusChange = (newStatus: "Aprobado" | "Investigación" | "Rechazado" | "Pendiente") => {
     setStatus(newStatus)
-    if (claim) {
-      claim.status = newStatus
+  }
+
+  const handleSaveStatus = async () => {
+    if (!claim) return
+    setSavingStatus(true)
+    try {
+      const updatedClaim = await claimsService.updateClaimStatus(claim.id, status)
+      if (updatedClaim) {
+        setClaim(updatedClaim)
+        setToast({ 
+          message: `Dictamen guardado exitosamente. El siniestro ahora está en estado: ${status}.`, 
+          type: "success" 
+        })
+        setTimeout(() => {
+          setToast(null)
+          router.push("/")
+        }, 2200)
+      }
+    } catch (e) {
+      console.error(e)
+      setToast({ 
+        message: "No se pudo guardar el dictamen. Verifica la conexión con el backend.", 
+        type: "error" 
+      })
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setSavingStatus(false)
     }
   }
 
@@ -67,9 +135,18 @@ export default function ClaimDetail() {
     try {
       const scoringResult = await claimsService.fetchScore(claim.id, true)
       setClaim(applyScoringToClaim(claim, scoringResult))
+      setToast({ 
+        message: "Auditoría recalculada con éxito.", 
+        type: "success" 
+      })
+      setTimeout(() => setToast(null), 3000)
     } catch (e) {
       console.error(e)
-      alert("No se pudo recalcular la auditoría. Verifica que el backend esté activo.")
+      setToast({ 
+        message: "No se pudo recalcular la auditoría. Verifica que el backend esté activo.", 
+        type: "error" 
+      })
+      setTimeout(() => setToast(null), 4000)
     } finally {
       setScoring(false)
     }
@@ -195,24 +272,52 @@ export default function ClaimDetail() {
                     {btn.label}
                   </button>
                 ))}
+
+                {activeClaim.status !== status && (
+                  <button
+                    onClick={handleSaveStatus}
+                    disabled={savingStatus}
+                    title="Guardar Dictamen Técnico"
+                    className="p-3 bg-brand-navy text-white hover:bg-brand-blue disabled:bg-slate-200 rounded-md shadow-md transition-all duration-300 flex items-center justify-center cursor-pointer select-none animate-pulse"
+                  >
+                    {savingStatus ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="flex items-center gap-2 print:hidden">
               <Link
                 href={`/preview-correo?id=${encodeURIComponent(activeClaim.id)}`}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-brand-navy hover:bg-slate-50 hover:border-slate-300 rounded-md shadow-sm transition-all duration-300 print:hidden text-xs font-black uppercase tracking-widest select-none cursor-pointer"
+                title="Ver y Enviar Correo"
+                className="p-3 bg-white border border-slate-200 text-brand-navy hover:bg-slate-50 hover:border-slate-300 hover:text-brand-blue rounded-md shadow-sm transition-all duration-300 print:hidden flex items-center justify-center select-none cursor-pointer"
               >
-                <Mail className="w-3.5 h-3.5 text-brand-blue" />
-                <span>Ver Correo</span>
+                <Mail className="w-4 h-4 text-brand-blue" />
               </Link>
 
               <button 
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-navy text-white hover:bg-brand-blue hover:text-white rounded-md shadow-md transition-all duration-300 print:hidden cursor-pointer text-xs font-black uppercase tracking-widest select-none"
+                title="Exportar Informe de Auditoría"
+                className="p-3 bg-brand-navy text-white hover:bg-brand-blue hover:text-white rounded-md shadow-md transition-all duration-300 print:hidden flex items-center justify-center cursor-pointer select-none"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Exportar Informe</span>
+                <Download className="w-4 h-4" />
+              </button>
+
+              <button 
+                onClick={handleDeleteClaim}
+                disabled={isDeleting}
+                title="Eliminar Expediente Permanentemente"
+                className="p-3 bg-rose-600 text-white hover:bg-rose-700 disabled:bg-slate-300 rounded-md shadow-md transition-all duration-300 print:hidden flex items-center justify-center cursor-pointer select-none"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
               </button>
             </div>
 
@@ -284,6 +389,27 @@ export default function ClaimDetail() {
           setIsOpen={setIsChatOpen} 
         />
       </div>
+
+      {/* Notificación Toast Premium */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl border transition-all duration-500 transform translate-y-0 ${
+          toast.type === "success" 
+            ? "bg-slate-900 border-emerald-500/30 text-white" 
+            : "bg-slate-900 border-rose-500/30 text-white"
+        }`}>
+          {toast.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 animate-bounce" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 animate-pulse" />
+          )}
+          <div className="flex flex-col">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-200">
+              {toast.type === "success" ? "Operación Exitosa" : "Error en Proceso"}
+            </span>
+            <span className="text-[11px] font-medium text-slate-400">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

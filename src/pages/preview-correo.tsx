@@ -19,7 +19,10 @@ import {
   ArrowRight,
   Code,
   Terminal,
-  Play
+  Play,
+  Save,
+  CheckCircle2,
+  AlertTriangle
 } from "lucide-react"
 
 export default function PreviewCorreo() {
@@ -30,6 +33,9 @@ export default function PreviewCorreo() {
   const [loading, setLoading] = useState(true)
   const [dispatchStatus, setDispatchStatus] = useState<"pending" | "sending" | "sent">("pending")
   const [emailTemplate, setEmailTemplate] = useState<string>("")
+  const [recipientEmail, setRecipientEmail] = useState("")
+  const [subjectLine, setSubjectLine] = useState("")
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [statusMessage, setStatusMessage] = useState<string>("")
 
   // Estado de las Pestañas (outbound = bandeja salida, inbound = simulador de entrada)
@@ -70,8 +76,46 @@ export default function PreviewCorreo() {
         const data = await claimsService.getClaimById(claimId)
         if (data) {
           setClaim(data)
+          
+          // Pre-llenar campos de correo con el destinatario real
+          let email = ""
+          if (data.remitente_correo) {
+            const match = data.remitente_correo.match(/<([^>]+)>/)
+            email = match ? match[1] : data.remitente_correo
+          } else {
+            const cleanInsuredName = data.insuredName.split("(")[0].trim()
+            email = cleanInsuredName.toLowerCase().replace(/\s+/g, ".") + "@gmail.com"
+          }
+          setRecipientEmail(email)
+          
+          // Asunto acorde al estado
+          let statusLabel = "Confirmación de Ingreso"
+          if (data.status === "Aprobado") statusLabel = "Dictamen de Aprobación"
+          if (data.status === "Rechazado") statusLabel = "Notificación de Rechazo"
+          if (data.status === "Investigación") statusLabel = "Bandeja de Investigación"
+          setSubjectLine(`[Oficial] ${statusLabel} - Siniestro ${data.id}`)
+
           const res = await claimsService.sendClaimEmail(data.id)
-          setEmailTemplate(res.htmlTemplate)
+          
+          // Enriquecer la plantilla dinámicamente con el estado actual
+          let templateHtml = res.htmlTemplate
+          if (data.status === "Aprobado") {
+            templateHtml = templateHtml
+              .replace("Pendiente de Auditoría", "Aprobado para Pago y Liquidación")
+              .replace("ingresado exitosamente", "<strong>APROBADO</strong> para su pago inmediato")
+              .replace("#d97706", "#10b981") // Cambiar color amarillo a verde
+          } else if (data.status === "Rechazado") {
+            templateHtml = templateHtml
+              .replace("Pendiente de Auditoría", "Rechazado / Declinado")
+              .replace("ingresado exitosamente", "<strong>RECHAZADO</strong> por inconsistencias graves detectadas en la auditoría de riesgo")
+              .replace("#d97706", "#ef4444") // Cambiar color amarillo a rojo
+          } else if (data.status === "Investigación") {
+            templateHtml = templateHtml
+              .replace("Pendiente de Auditoría", "Bajo Investigación Especial")
+              .replace("ingresado exitosamente", "retenido temporalmente bajo proceso de <strong>INVESTIGACIÓN ESPECIAL</strong>")
+          }
+          
+          setEmailTemplate(templateHtml)
         }
       } catch (err) {
         console.error("Error al cargar siniestro para correo:", err)
@@ -96,14 +140,21 @@ export default function PreviewCorreo() {
     
     setDispatchStatus("sending")
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-      const res = await claimsService.sendClaimEmail(claim.id)
+      const res = await claimsService.sendCustomClaimEmail(
+        claim.id,
+        recipientEmail,
+        subjectLine,
+        emailTemplate
+      )
       setDispatchStatus("sent")
       setStatusMessage(res.message)
+      setToast({ message: "¡Correo electrónico enviado exitosamente!", type: "success" })
+      setTimeout(() => setToast(null), 3000)
     } catch (err) {
       console.error(err)
       setDispatchStatus("pending")
-      alert("Error en la transmisión SMTP.")
+      setToast({ message: "Error al transmitir correo vía Gmail API.", type: "error" })
+      setTimeout(() => setToast(null), 4000)
     }
   }
 
@@ -314,24 +365,41 @@ export default function PreviewCorreo() {
                         </h4>
                       </div>
 
-                      <div className="space-y-4">
+                      <div className="space-y-4 text-xs">
                         <div className="flex justify-between items-center text-xs">
                           <span className="font-bold text-slate-400">Canal de Envío:</span>
-                          <span className="font-extrabold text-brand-navy font-mono">SMTP / HTML5</span>
+                          <span className="font-extrabold text-brand-navy font-mono">GOOGLE GMAIL API</span>
                         </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-slate-400">Destinatario:</span>
-                          <span className="font-extrabold text-brand-navy underline">{claim.insuredName.toLowerCase().replace(/\s+/g, ".")}@gmail.com</span>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Destinatario (Email):</label>
+                          <input
+                            type="email"
+                            value={recipientEmail}
+                            onChange={(e) => setRecipientEmail(e.target.value)}
+                            className="w-full p-2 border border-slate-200 text-brand-navy rounded bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-blue/30 font-bold"
+                          />
                         </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-slate-400">Estado SMTP:</span>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Asunto del Correo:</label>
+                          <input
+                            type="text"
+                            value={subjectLine}
+                            onChange={(e) => setSubjectLine(e.target.value)}
+                            className="w-full p-2 border border-slate-200 text-brand-navy rounded bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-blue/30 font-bold"
+                          />
+                        </div>
+
+                        <div className="flex justify-between items-center text-xs border-t border-slate-100 pt-3">
+                          <span className="font-bold text-slate-400">Estado de Envío:</span>
                           {dispatchStatus === "sent" ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono uppercase">
-                              Despachado
+                              Transmitido
                             </span>
                           ) : dispatchStatus === "sending" ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-brand-blue bg-brand-blue/5 border border-brand-blue/20 px-2 py-0.5 rounded font-mono uppercase animate-pulse">
-                              Transmitiendo...
+                              Enviando...
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-mono uppercase">
@@ -396,13 +464,16 @@ export default function PreviewCorreo() {
                     </div>
                   </div>
 
-                  {/* Columna Derecha: Cliente de Correo Virtual */}
+                  {/* Columna Derecha: Cliente de Correo */}
                   <div className="lg:col-span-8 space-y-4">
                     <div className="flex items-center justify-between bg-slate-200/80 px-4 py-2 border border-slate-300 text-slate-600 font-semibold text-xs rounded-t-md">
                       <div className="flex items-center gap-2">
                         <Inbox className="w-4 h-4 text-slate-400" />
-                        <span>Visor de Correo Corporativo (Bandeja de Alejandro)</span>
+                        <span>Visor y Editor Interactivo (Haz clic sobre el texto para modificarlo)</span>
                       </div>
+                      <span className="bg-brand-blue/10 text-brand-blue text-[9px] px-2 py-0.5 rounded font-black uppercase shrink-0">
+                        Editable
+                      </span>
                     </div>
 
                     <div className="bg-white border-x border-b border-slate-200 shadow-sm rounded-b-md overflow-hidden">
@@ -415,13 +486,12 @@ export default function PreviewCorreo() {
                             </div>
                             <div>
                               <strong className="text-slate-400 font-bold uppercase tracking-wider mr-2">Para:</strong>
-                              <span className="font-bold text-slate-700 underline">{claim.insuredName}</span>
-                              <span className="text-slate-400 ml-1 font-mono">&lt;{claim.insuredName.toLowerCase().replace(/\s+/g, ".")}@gmail.com&gt;</span>
+                              <span className="font-bold text-slate-700 underline">{recipientEmail}</span>
                             </div>
                             <div>
                               <strong className="text-slate-400 font-bold uppercase tracking-wider mr-2">Asunto:</strong>
                               <span className="font-extrabold text-brand-navy">
-                                [Oficial] Ficha Registral de Ingreso Siniestro {claim.id}
+                                {subjectLine}
                               </span>
                             </div>
                           </div>
@@ -431,7 +501,10 @@ export default function PreviewCorreo() {
                       <div className="bg-[#f4f6f9] p-6 overflow-x-auto min-h-[500px]">
                         {emailTemplate ? (
                           <div 
-                            className="email-rendered-container shadow-xs mx-auto"
+                            contentEditable
+                            suppressContentEditableWarning
+                            className="email-rendered-container shadow-sm mx-auto bg-white p-8 outline-none border border-slate-200 focus:border-brand-blue rounded-lg cursor-text min-h-[480px]"
+                            onBlur={(e) => setEmailTemplate(e.currentTarget.innerHTML)}
                             dangerouslySetInnerHTML={{ __html: emailTemplate }} 
                           />
                         ) : (
@@ -720,6 +793,27 @@ export default function PreviewCorreo() {
         </div>
 
       </main>
+
+      {/* Notificación Toast Premium */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl border transition-all duration-500 transform translate-y-0 ${
+          toast.type === "success" 
+            ? "bg-slate-900 border-emerald-500/30 text-white" 
+            : "bg-slate-900 border-rose-500/30 text-white"
+        }`}>
+          {toast.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 animate-bounce" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 animate-pulse" />
+          )}
+          <div className="flex flex-col">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-200">
+              {toast.type === "success" ? "Operación Exitosa" : "Error en Proceso"}
+            </span>
+            <span className="text-[11px] font-medium text-slate-400">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -20,6 +20,7 @@ export interface SiniestroBackend {
   historial_siniestros_asegurado: number
   etiqueta_fraude_simulada: boolean
   gmail_correo_id?: number | null
+  remitente_correo?: string | null
   total_score?: number
   average_points?: number
   score_color?: string

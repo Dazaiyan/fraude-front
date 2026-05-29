@@ -5,7 +5,7 @@ import ClaimTable from "@/components/triage/ClaimTable"
 import { useAuth } from "@/context/AuthContext"
 import { useSiniestros } from "@/hooks/useSiniestros"
 import { listGmailCorreos } from "@/services/gmail"
-import { Filter, Layers, Plus, Search, Database, RefreshCw, Mail } from "lucide-react"
+import { Filter, Layers, Plus, Search, Database, RefreshCw, Mail, Inbox, Archive, Globe } from "lucide-react"
 import Link from "next/link"
 
 export default function Dashboard() {
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [filteredClaims, setFilteredClaims] = useState(claims)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedRiskFilter, setSelectedRiskFilter] = useState<"all" | "high" | "medium" | "low">("all")
+  const [activeTab, setActiveTab] = useState<"inbox" | "archived" | "all">("inbox")
   const [indexing, setIndexing] = useState(false)
 
   useEffect(() => {
@@ -44,16 +45,22 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    setFilteredClaims(claims)
-  }, [claims])
-
-  useEffect(() => {
     let result = claims
+
+    // 1. Filtrar por Tab (Bandeja de Entrada vs Archivados vs Todos)
+    if (activeTab === "inbox") {
+      result = result.filter((c) => c.status === "Pendiente" || !c.status)
+    } else if (activeTab === "archived") {
+      result = result.filter((c) => c.status === "Aprobado" || c.status === "Investigación" || c.status === "Rechazado")
+    }
+
+    // 2. Filtrar por Nivel de Riesgo (Rojo, Amarillo, Verde)
     if (selectedRiskFilter !== "all") {
       result = result.filter((c) => c.riskLevel === selectedRiskFilter)
     }
+
     setFilteredClaims(result)
-  }, [selectedRiskFilter, claims])
+  }, [activeTab, selectedRiskFilter, claims])
 
   const handleIndex = async () => {
     setIndexing(true)
@@ -161,6 +168,38 @@ export default function Dashboard() {
               </button>
             </div>
           )}
+
+          {/* Selector de Bandeja de Entrada vs Archivados */}
+          <div className="flex border-b border-slate-200">
+            {[
+              { id: "inbox", label: "Bandeja de Entrada", icon: Inbox, count: claims.filter(c => c.status === "Pendiente" || !c.status).length },
+              { id: "archived", label: "Expedientes Archivados", icon: Archive, count: claims.filter(c => c.status === "Aprobado" || c.status === "Investigación" || c.status === "Rechazado").length },
+              { id: "all", label: "Todos los Casos", icon: Globe, count: claims.length }
+            ].map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-black uppercase tracking-wider transition-all duration-300 cursor-pointer select-none ${
+                    activeTab === tab.id
+                      ? "border-brand-blue text-brand-navy font-black scale-102"
+                      : "border-transparent text-slate-400 hover:text-slate-650"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{tab.label}</span>
+                  <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                    activeTab === tab.id
+                      ? "bg-brand-blue/10 text-brand-blue"
+                      : "bg-slate-100 text-slate-500"
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
 
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
             <div className="flex flex-wrap items-center gap-1.5">

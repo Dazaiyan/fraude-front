@@ -7,6 +7,7 @@ import { useSiniestros } from "@/hooks/useSiniestros"
 import { listGmailCorreos } from "@/services/gmail"
 import { Filter, Layers, Plus, Search, Database, RefreshCw, Mail, Inbox, Archive, Globe } from "lucide-react"
 import Link from "next/link"
+import { StatCardsSkeleton, GmailBannerSkeleton, ClaimTableSkeleton } from "@/components/ui/Skeleton"
 
 export default function Dashboard() {
   const { ready, user, syncGmailInbox, scanning, syncInFlight } = useAuth()
@@ -95,9 +96,11 @@ export default function Dashboard() {
                 Siniestros Entrantes
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                {summary
-                  ? `${summary.total} siniestros de tu cuenta`
-                  : "Solo se muestran siniestros asociados a tu sesión de Gmail"}
+                {loading
+                  ? "Sincronizando siniestros de tu cuenta…"
+                  : summary
+                    ? `${summary.total} siniestros de tu cuenta`
+                    : "Solo se muestran siniestros asociados a tu sesión de Gmail"}
               </p>
             </div>
 
@@ -109,6 +112,8 @@ export default function Dashboard() {
               <span>Reportar Siniestro</span>
             </Link>
           </div>
+
+          {loading && correoCount === null && user?.email && <GmailBannerSkeleton />}
 
           {correoCount !== null && correoCount > 0 && (
             <Link
@@ -132,6 +137,9 @@ export default function Dashboard() {
             </Link>
           )}
 
+          {loading ? (
+            <StatCardsSkeleton />
+          ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Rojo", value: riskCounts.Rojo ?? 0, color: "text-rose-700 bg-rose-50 border-rose-200" },
@@ -149,6 +157,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          )}
 
           {indexStatus && indexStatus.pending > 0 && (
             <div className="flex items-center justify-between gap-3 bg-white border border-brand-blue/20 rounded-lg p-3">
@@ -194,7 +203,7 @@ export default function Dashboard() {
                       ? "bg-brand-blue/10 text-brand-blue"
                       : "bg-slate-100 text-slate-500"
                   }`}>
-                    {tab.count}
+                    {loading ? "—" : tab.count}
                   </span>
                 </button>
               )
@@ -250,10 +259,7 @@ export default function Dashboard() {
           </div>
 
           {loading ? (
-            <div className="py-24 text-center bg-white border border-slate-200 rounded-lg shadow-sm">
-              <div className="w-8 h-8 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin mx-auto mb-4" />
-              <span className="text-sm font-semibold text-slate-400">Analizando base de datos de siniestros...</span>
-            </div>
+            <ClaimTableSkeleton rows={5} />
           ) : (
             <div className="space-y-4">
               <ClaimTable claims={filteredClaims} searchTerm={searchTerm} />

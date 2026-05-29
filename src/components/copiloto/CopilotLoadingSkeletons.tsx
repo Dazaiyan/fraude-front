@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { Database, Shield, Sparkles } from "lucide-react"
+import { SkeletonBar } from "@/components/ui/Skeleton"
 
 const LOAD_STEPS = [
   {
@@ -19,31 +20,27 @@ const LOAD_STEPS = [
   },
 ] as const
 
-function ShimmerBar({ className }: { className?: string }) {
-  return <div className={`rounded bg-slate-200 animate-pulse ${className ?? ""}`} aria-hidden />
-}
-
 export function AlertsSummarySkeleton() {
   return (
     <>
       <div className="grid grid-cols-2 gap-3.5">
         <div className="bg-rose-50/80 border border-rose-100 rounded-md p-3.5 space-y-2">
-          <ShimmerBar className="h-2.5 w-[72%]" />
-          <ShimmerBar className="h-7 w-20" />
-          <ShimmerBar className="h-2 w-24" />
+          <SkeletonBar className="h-2.5 w-[72%]" />
+          <SkeletonBar className="h-7 w-20" />
+          <SkeletonBar className="h-2 w-24" />
         </div>
         <div className="bg-brand-lightBlue/5 border border-brand-lightBlue/10 rounded-md p-3.5 space-y-2">
-          <ShimmerBar className="h-2.5 w-[78%]" />
-          <ShimmerBar className="h-7 w-10" />
-          <ShimmerBar className="h-2 w-20" />
+          <SkeletonBar className="h-2.5 w-[78%]" />
+          <SkeletonBar className="h-7 w-10" />
+          <SkeletonBar className="h-2 w-20" />
         </div>
       </div>
 
       <div className="mt-4 p-3 bg-amber-50/80 border border-amber-100 rounded-md space-y-2">
-        <ShimmerBar className="h-2.5 w-40" />
-        <ShimmerBar className="h-3 w-48" />
-        <ShimmerBar className="h-2.5 w-full" />
-        <ShimmerBar className="h-2.5 w-[88%]" />
+        <SkeletonBar className="h-2.5 w-40" />
+        <SkeletonBar className="h-3 w-48" />
+        <SkeletonBar className="h-2.5 w-full" />
+        <SkeletonBar className="h-2.5 w-[88%]" />
       </div>
     </>
   )
@@ -55,24 +52,24 @@ export function ActiveCaseSkeleton() {
       <div className="flex items-center gap-2.5 flex-1 min-w-0">
         <div className="w-8 h-8 bg-slate-700 rounded-md shrink-0" />
         <div className="space-y-2 flex-1 min-w-0">
-          <ShimmerBar className="h-2 w-24 bg-slate-700" />
-          <ShimmerBar className="h-3 w-44 max-w-full bg-slate-700" />
+          <SkeletonBar className="h-2 w-24 bg-slate-700" />
+          <SkeletonBar className="h-3 w-44 max-w-full bg-slate-700" />
         </div>
       </div>
-      <ShimmerBar className="h-7 w-24 shrink-0 bg-slate-700 rounded-md" />
+      <SkeletonBar className="h-7 w-24 shrink-0 bg-slate-700 rounded-md" />
     </div>
   )
 }
 
 export function ClaimSelectSkeleton() {
-  return <ShimmerBar className="h-6 w-[180px] rounded bg-slate-700/80" />
+  return <SkeletonBar className="h-6 w-[180px] rounded bg-slate-700/80" />
 }
 
 export function SuggestedQuestionsSkeleton() {
   return (
     <div className="flex flex-wrap gap-1.5">
-      <ShimmerBar className="h-7 w-40 rounded-md" />
-      <ShimmerBar className="h-7 w-44 rounded-md" />
+      <SkeletonBar className="h-7 w-40 rounded-md" />
+      <SkeletonBar className="h-7 w-44 rounded-md" />
     </div>
   )
 }
@@ -97,10 +94,10 @@ export function ChatWelcomeSkeleton() {
           <Sparkles className="w-4 h-4 text-brand-lightBlue animate-pulse" />
         </div>
         <div className="flex-1 p-3.5 bg-white border border-slate-200 rounded-md shadow-sm space-y-2.5">
-          <ShimmerBar className="h-2.5 w-full" />
-          <ShimmerBar className="h-2.5 w-[94%]" />
-          <ShimmerBar className="h-2.5 w-[78%]" />
-          <ShimmerBar className="h-2.5 w-[62%]" />
+          <SkeletonBar className="h-2.5 w-full" />
+          <SkeletonBar className="h-2.5 w-[94%]" />
+          <SkeletonBar className="h-2.5 w-[78%]" />
+          <SkeletonBar className="h-2.5 w-[62%]" />
         </div>
       </div>
 

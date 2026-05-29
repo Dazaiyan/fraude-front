@@ -7,6 +7,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/services/notifications"
+import { NotificationsSkeleton } from "@/components/ui/Skeleton"
 
 interface HeaderProps {
   title?: string
@@ -146,10 +147,7 @@ export default function Header({
 
               <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
                 {loading && notifications.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400">
-                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
-                    <p className="text-xs font-bold">Cargando alertas...</p>
-                  </div>
+                  <NotificationsSkeleton count={3} />
                 ) : notifications.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <p className="text-xs font-bold">No tienes notificaciones de auditoría</p>

@@ -7,6 +7,7 @@ import ClientData from "@/components/case-detail/ClientData"
 import ClarityCard from "@/components/case-detail/ClarityCard"
 import SimilarityWidget from "@/components/case-detail/SimilarityWidget"
 import CopilotChat from "@/components/chatbot/CopilotChat"
+import { ClaimDetailContentSkeleton } from "@/components/ui/Skeleton"
 import { claimsService, Claim } from "@/services/claims"
 import { 
   ArrowLeft, 
@@ -132,11 +133,8 @@ export default function ClaimDetail() {
     return (
       <div className="flex bg-slate-50 min-h-screen">
         <Sidebar />
-        <main className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="w-10 h-10 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin mb-4" />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Cargando Expediente Analítico...
-          </span>
+        <main className="flex-1 flex flex-col min-h-screen overflow-y-auto">
+          <ClaimDetailContentSkeleton />
         </main>
       </div>
     )

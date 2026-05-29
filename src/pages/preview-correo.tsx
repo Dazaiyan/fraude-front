@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   AlertTriangle
 } from "lucide-react"
+import { PreviewCorreoSkeleton } from "@/components/ui/Skeleton"
 
 export default function PreviewCorreo() {
   const router = useRouter()
@@ -309,12 +310,7 @@ export default function PreviewCorreo() {
           {activeTab === "outbound" && (
             <>
               {loading ? (
-                <div className="bg-white border border-slate-200 p-12 text-center flex flex-col items-center justify-center space-y-4">
-                  <RefreshCw className="w-8 h-8 text-brand-blue animate-spin" />
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-                    Cargando Ficha de Correo...
-                  </p>
-                </div>
+                <PreviewCorreoSkeleton />
               ) : !claim ? (
                 <div className="bg-white border border-slate-200 p-12 text-center space-y-3">
                   <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto" />

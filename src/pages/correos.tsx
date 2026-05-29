@@ -6,6 +6,7 @@ import { listGmailCorreos, processCorreoToBandeja } from "@/services/gmail"
 import type { GmailCorreoRead } from "@/types/backend"
 import { Mail, Paperclip, RefreshCw, Send } from "lucide-react"
 import Link from "next/link"
+import { CorreosTableSkeleton } from "@/components/ui/Skeleton"
 
 function formatDate(value?: string | null): string {
   if (!value) return "—"
@@ -169,12 +170,7 @@ export default function CorreosPage() {
 
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
             {loading ? (
-              <div className="py-24 text-center">
-                <div className="w-8 h-8 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin mx-auto mb-4" />
-                <span className="text-sm font-semibold text-slate-400">
-                  Analizando correos de Gmail…
-                </span>
-              </div>
+              <CorreosTableSkeleton rows={6} />
             ) : correos.length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-500 space-y-2">
                 <p>No hay correos tuyos en la base de datos.</p>

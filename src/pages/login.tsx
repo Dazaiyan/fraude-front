@@ -36,6 +36,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [scanSummary, setScanSummary] = useState<string | null>(null)
   const [postOAuthBusy, setPostOAuthBusy] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   const returnTo = typeof router.query.returnTo === "string" ? router.query.returnTo : "/"
   const postLoginRedirectRef = useRef(false)
@@ -75,6 +76,7 @@ export default function LoginPage() {
       } catch (e) {
         postLoginRedirectRef.current = false
         setPostOAuthBusy(false)
+        safeReplace(router, `/login?returnTo=${encodeURIComponent(returnTo)}`)
         setError(e instanceof Error ? e.message : "No se pudo completar el inicio de sesión.")
       }
     }
@@ -91,9 +93,12 @@ export default function LoginPage() {
 
   const handleConnect = async (revokeExisting = false) => {
     setError(null)
+    setIsConnecting(true)
     try {
       await connectGmail(returnTo, revokeExisting)
+      setIsConnecting(false)
     } catch (e) {
+      setIsConnecting(false)
       setError(e instanceof Error ? e.message : "No se pudo iniciar OAuth de Gmail.")
     }
   }
@@ -117,6 +122,10 @@ export default function LoginPage() {
 
   if (!ready) {
     return <LoginSessionLoader />
+  }
+
+  if (isConnecting) {
+    return <LoginSessionLoader message="Redirigiendo a Google…" />
   }
 
   if (isScanningInbox && !error) {
@@ -163,7 +172,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => handleConnect(false)}
-              disabled={scanning}
+              disabled={scanning || isConnecting}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:opacity-60 text-slate-700 text-sm font-semibold border border-slate-300 rounded-md shadow-sm transition-colors"
             >
               <GoogleIcon className="w-5 h-5 shrink-0" />
@@ -173,10 +182,10 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleScan}
-              disabled={scanning}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-brand-blue hover:bg-brand-navy disabled:bg-slate-300 text-white text-xs font-black uppercase tracking-wider rounded-md transition-colors"
+              disabled={scanning || postOAuthBusy}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-brand-blue hover:bg-brand-navy disabled:bg-slate-300 disabled:opacity-60 text-white text-xs font-black uppercase tracking-wider rounded-md transition-colors"
             >
-              {scanning ? (
+              {scanning || postOAuthBusy ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
                   Escaneando Gmail…
@@ -194,7 +203,8 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => handleConnect(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 text-[11px] font-semibold text-slate-500 hover:text-brand-blue transition-colors"
+              disabled={isConnecting}
+              className="w-full flex items-center justify-center gap-2 py-2 text-[11px] font-semibold text-slate-500 hover:text-brand-blue disabled:opacity-50 transition-colors"
             >
               <GoogleIcon className="w-4 h-4 shrink-0" />
               Usar otra cuenta de Google

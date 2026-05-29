@@ -90,6 +90,7 @@ export function mapSiniestroToClaim(s: SiniestroBackend): Claim {
     daysBetweenOccurrenceReport: s.dias_entre_ocurrencia_reporte,
     claimHistoryCount: s.historial_siniestros_asegurado,
     simulatedFraudLabel: s.etiqueta_fraude_simulada ? "Alta/Crítica" : "Baja",
+    remitente_correo: s.remitente_correo,
     total_score: normalized.total_score,
     average_points: s.average_points,
     score_color: normalized.score_color,

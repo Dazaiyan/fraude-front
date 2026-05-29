@@ -72,6 +72,7 @@ export interface Claim {
   daysBetweenOccurrenceReport?: number  // dias_entre_ocurrencia_reporte
   claimHistoryCount?: number  // historial_siniestros_asegurado
   simulatedFraudLabel?: string  // etiqueta_fraude_simulada
+  remitente_correo?: string | null
 
   // Adaptación al Backend de Reglas y Puntos
   total_score?: number
@@ -1044,6 +1045,76 @@ export const claimsService = {
         }
 
         return "Como **Agente de IA de Consulta Agéntica Global** de Aseguradora del Sur, he analizado los reclamos del mes. En la sucursal de Quito la siniestralidad está en rangos estables. En la sucursal de Guayaquil observamos una concentración inusual del 18% en alertas rojas vinculadas a talleres mecánicos no autorizados."
+      }
+    }
+  },
+
+  async updateClaimStatus(id: string, status: "Aprobado" | "Investigación" | "Rechazado" | "Pendiente"): Promise<Claim | null> {
+    try {
+      const response = await api.patch<SiniestroBackend>(
+        `/api/v1/siniestros/${encodeURIComponent(id.trim())}/status`,
+        { estado: status }
+      )
+      
+      // Actualizar también en el mock local en memoria
+      const index = mockClaims.findIndex((c) => c.id === id.trim())
+      if (index !== -1) {
+        mockClaims[index].status = status
+      }
+      
+      return mapSiniestroToClaim(response.data)
+    } catch (error) {
+      console.warn("Backend PATCH /status no disponible. Simulando actualización de estado localmente.")
+      const mock = mockClaims.find((c) => c.id === id.trim())
+      if (mock) {
+        mock.status = status
+        return mock
+      }
+      return null
+    }
+  },
+
+  async sendCustomClaimEmail(claimId: string, toEmail: string, subject: string, bodyHtml: string): Promise<{ success: boolean; message: string; htmlTemplate: string }> {
+    try {
+      const response = await api.post<{ success: boolean; message: string; htmlTemplate: string }>(
+        "/api/v1/siniestros/send-custom-email",
+        {
+          id_siniestro: claimId.trim(),
+          to_email: toEmail.trim(),
+          subject: subject.trim(),
+          body_html: bodyHtml
+        }
+      )
+      return response.data
+    } catch (error) {
+      console.warn("Backend send-custom-email no disponible. Simulando envío local.")
+      return {
+        success: true,
+        message: `[Simulación] Correo enviado con éxito a ${toEmail}.`,
+        htmlTemplate: bodyHtml
+      }
+    }
+  },
+
+  async deleteClaim(claimId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await api.delete<{ success: boolean; message: string }>(
+        `/api/v1/siniestros/${encodeURIComponent(claimId.trim())}`
+      )
+      const idx = mockClaims.findIndex((c) => c.id === claimId.trim())
+      if (idx !== -1) {
+        mockClaims.splice(idx, 1)
+      }
+      return { success: true, message: response.data.message || "Siniestro eliminado con éxito de la base de datos." }
+    } catch (error) {
+      console.warn("Backend DELETE no disponible. Simulando eliminación local.")
+      const idx = mockClaims.findIndex((c) => c.id === claimId.trim())
+      if (idx !== -1) {
+        mockClaims.splice(idx, 1)
+      }
+      return {
+        success: true,
+        message: `[Simulación] Siniestro ${claimId} eliminado exitosamente en memoria local.`
       }
     }
   },

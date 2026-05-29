@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import Sidebar from "@/components/layout/Sidebar"
 import Header from "@/components/layout/Header"
@@ -46,6 +46,22 @@ export default function ReportarSiniestro() {
   const [diasEntreOcurrenciaReporte, setDiasEntreOcurrenciaReporte] = useState("")
   const [historialSiniestrosAsegurado, setHistorialSiniestrosAsegurado] = useState("")
   const [etiquetaFraudeSimulada, setEtiquetaFraudeSimulada] = useState("Alta/Crítica")
+
+  // Auto-calcular días entre la ocurrencia del siniestro y la fecha de reporte
+  useEffect(() => {
+    if (fechaOcurrencia && fechaReporte) {
+      const dateOcur = new Date(fechaOcurrencia)
+      const dateRep = new Date(fechaReporte)
+      
+      // Ajustar zonas horarias para cálculo exacto de días locales
+      const utc1 = Date.UTC(dateOcur.getFullYear(), dateOcur.getMonth(), dateOcur.getDate())
+      const utc2 = Date.UTC(dateRep.getFullYear(), dateRep.getMonth(), dateRep.getDate())
+      
+      const diffTime = utc2 - utc1
+      const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)))
+      setDiasEntreOcurrenciaReporte(String(diffDays))
+    }
+  }, [fechaOcurrencia, fechaReporte])
   
   // Pruebas fotográficas adjuntas
   const [images, setImages] = useState<string[]>([])

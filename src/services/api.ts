@@ -13,14 +13,12 @@ function attachAnalystHeader(config: InternalAxiosRequestConfig): void {
   const user = loadStoredUser()
   if (!user?.email) return
 
-  if (config.headers && typeof config.headers.set === "function") {
-    config.headers.set("X-Analyst-Email", user.email)
-    return
-  }
-
-  config.headers = {
-    ...(config.headers as Record<string, string> | undefined),
-    "X-Analyst-Email": user.email,
+  if (config.headers) {
+    if (typeof config.headers.set === "function") {
+      config.headers.set("X-Analyst-Email", user.email)
+    } else {
+      (config.headers as any)["X-Analyst-Email"] = user.email
+    }
   }
 }
 

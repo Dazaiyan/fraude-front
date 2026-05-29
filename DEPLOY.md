@@ -166,13 +166,21 @@ Flujo: `git push origin main` → build y deploy en https://fraude-front.vercel.
 
 Archivo: `.github/workflows/deploy-vercel.yml`
 
-Secrets en GitHub → **fraude-front** → **Settings → Secrets → Actions**:
+Secrets en GitHub → **fraude-front** → **Settings → Secrets and variables → Actions**:
 
 | Secret | Cómo obtenerlo |
 |--------|----------------|
 | `VERCEL_TOKEN` | [vercel.com/account/tokens](https://vercel.com/account/tokens) |
-| `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` |
-| `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
+| `VERCEL_ORG_ID` | Tras `vercel link`: `.vercel/project.json` → `orgId` |
+| `VERCEL_PROJECT_ID` | Tras `vercel link`: `.vercel/project.json` → `projectId` |
+
+En la carpeta del front:
+
+```powershell
+cd D:\work\fraude-front
+vercel link --yes --project fraude-front
+Get-Content .vercel\project.json
+```
 
 Si usas **Opción A**, no hace falta el workflow.
 
